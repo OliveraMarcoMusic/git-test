@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RADR — Hear Your City</title>
+<!-- ═══════════════════════════════════════════
+     EXTERNAL DEPENDENCIES
+     ═══════════════════════════════════════════ -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://w.soundcloud.com/player/api.js"></script>
+<!-- SUPABASE READY -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: #08080f; color: #e8e8ec; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+::selection { background: #00e5a0; color: #08080f; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #08080f; }
+::-webkit-scrollbar-thumb { background: #1a1a2e; border-radius: 3px; }
+input, textarea, select, button { font-family: inherit; }
+@keyframes eq0 { 0% { height: 4px; } 100% { height: 14px; } }
+@keyframes eq1 { 0% { height: 4px; } 100% { height: 10px; } }
+@keyframes eq2 { 0% { height: 4px; } 100% { height: 17px; } }
+@keyframes eq3 { 0% { height: 4px; } 100% { height: 12px; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 768px) {
+  .nav-links-desktop { display: none !important; }
+  .mobile-menu-btn { display: block !important; }
+  .grid-2col { grid-template-columns: 1fr !important; }
+  .scene-bar-inner { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ═══════════════════════════════════════════
+   CONFIG — SUPABASE READY
+   TODO: replace with env vars in Vite/Next later
+   ═══════════════════════════════════════════ */
+const SUPABASE_URL = 'https://your-project.supabase.co';       // TODO: replace with real URL
+const SUPABASE_ANON_KEY = 'your-anon-key-here';                // TODO: replace with real anon key
+const SUPABASE_CONFIGURED = SUPABASE_URL !== 'https://your-project.supabase.co';
+
+// SUPABASE READY — initialize client
+let supabase = null;
+if (SUPABASE_CONFIGURED && window.supabase) {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+/* ═══════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════ */
+const ACCENT = '#00e5a0';
+const BG = '#08080f';
+const CARD_BG = '#0f0f1a';
+const CARD_BG_HOVER = '#141428';
+const BORDER = '#1a1a2e';
+const TEXT_DIM = '#8888a0';
+const TEXT_MED = '#b0b0c0';
+const AVATAR_COLORS = ['#00e5a0','#e84393','#6c5ce7','#fd79a8','#00b894','#e17055','#0984e3','#fdcb6e','#d63031','#00cec9','#a29bfe','#fab1a0','#55efc4','#ff7675','#74b9ff'];
+const GENRES = ['R&B','Hip-Hop','Indie Rock','Folk','Alternative','Pop','Singer-Songwriter','Dream Pop','Americana','Electronic'];
+
+// Artist status constants
+const ARTIST_STATUS = {
+  VERIFIED_LOCAL: 'verified_local',
+  COMMUNITY_CONFIRMED: 'community_confirmed',
+  NEW_ARTIST: 'new_artist',
+  UNDER_REVIEW: 'under_review',
+  APPROVED: 'approved',
+  PENDING: 'pending',
+};
+const STATUS_LABELS = {
+  [ARTIST_STATUS.VERIFIED_LOCAL]: 'Verified Local',
+  [ARTIST_STATUS.COMMUNITY_CONFIRMED]: 'Community Confirmed',
+  [ARTIST_STATUS.NEW_ARTIST]: 'New Artist',
+  [ARTIST_STATUS.UNDER_REVIEW]: 'Under Review',
+  [ARTIST_STATUS.APPROVED]: 'Approved',
+  [ARTIST_STATUS.PENDING]: 'Pending Review',
+};
+
+// Report reasons
+const REPORT_REASONS = [
+  { id: 'not_real', label: 'Not a real artist' },
+  { id: 'not_active', label: 'Not active in this scene' },
+  { id: 'spam', label: 'Spam or fake profile' },
+  { id: 'wrong_location', label: 'Misrepresenting location' },
+];
+
+/* ═══════════════════════════════════════════
+   SCENES
+   ═══════════════════════════════════════════ */
+const SCENES = [
+  { id: 'dmv', name: 'DMV', slug: 'dmv', description: 'The DMV scene pulses from basement shows in Columbia Heights to packed rooms in Baltimore and Northern VA. Go-go lives here. So does the next wave of indie R&B, experimental hip-hop, and genre-defiant sound. DC\'s scene has always been political — now it\'s personal.', cities: ['Washington DC', 'Baltimore', 'Northern VA', 'Maryland suburbs'] },
+  { id: 'nyc', name: 'NYC / North Jersey', slug: 'nyc', description: 'The city that never stops discovering. From Brooklyn DIY basements to Jersey City lofts, the NYC metro scene is the densest concentration of independent talent on the East Coast.', cities: ['New York City', 'Newark', 'Jersey City'] },
+  { id: 'philly', name: 'Philly / South Jersey', slug: 'philly', description: 'Philly doesn\'t follow trends — it sets them. The Roots proved it. Now a new generation of soul, hip-hop, and indie rock artists are building on that legacy.', cities: ['Philadelphia', 'Camden', 'Cherry Hill'] },
+  { id: 'boston', name: 'Boston / New England', slug: 'boston', description: 'College radio shaped this scene and it still shows. Boston\'s tight-knit indie community stretches to Cambridge, Providence, and beyond.', cities: ['Boston', 'Cambridge', 'Providence'] },
+  { id: 'richmond', name: 'Richmond / Tidewater', slug: 'richmond', description: 'Richmond\'s music scene punches way above its weight. From VCU house shows to Norfolk\'s waterfront venues, the Tidewater corridor breeds punk, indie, and experimental hip-hop.', cities: ['Richmond', 'Norfolk', 'Virginia Beach'] },
+  { id: 'raleigh', name: 'Raleigh-Durham', slug: 'raleigh', description: 'The Triangle\'s music scene is fueled by three research universities and a culture that values the weird. Merge Records put it on the map.', cities: ['Raleigh', 'Durham', 'Chapel Hill'] },
+  { id: 'atlanta', name: 'Atlanta Metro', slug: 'atlanta', description: 'Atlanta rewrote the rules of American music — twice. Trap, neo-soul, indie R&B, and experimental rap all trace roots here.', cities: ['Atlanta', 'Decatur', 'Marietta'] },
+  { id: 'nashville', name: 'Nashville', slug: 'nashville', description: 'Nashville isn\'t just country anymore. Behind the honky-tonks, a thriving indie, Americana, and alternative scene is redefining Music City.', cities: ['Nashville', 'Murfreesboro'] },
+  { id: 'charlotte', name: 'Charlotte', slug: 'charlotte', description: 'Charlotte\'s scene is the South\'s best-kept secret. A growing city with a growing appetite for live music, local hip-hop, and indie rock.', cities: ['Charlotte', 'Concord'] },
+  { id: 'sofla', name: 'South Florida', slug: 'sofla', description: 'From Miami bass to Latin fusion to Caribbean-influenced indie pop, South Florida\'s scene is as diverse as its people.', cities: ['Miami', 'Fort Lauderdale', 'West Palm Beach'] },
+];
+
+/* ═══════════════════════════════════════════
+   SAMPLE DATA ONLY
+   These are clearly fake demo artists used as
+   fallback when Supabase is not connected.
+   They are NOT real artists.
+   ═══════════════════════════════════════════ */
+const SAMPLE_ARTISTS = [
+  {
+    id: 'sample-1', created_at: '2026-01-01T00:00:00Z', is_sample: true,
+    name: 'Sample Artist One', city: 'Washington DC', home_scene: 'dmv', also_active_in: ['dmv'],
+    genres: ['R&B', 'Alternative'], verified: false, status: ARTIST_STATUS.APPROVED,
+    bio: 'This is a sample profile to demonstrate how artist pages look on RADR. This is not a real artist.',
+    color: AVATAR_COLORS[0],
+    soundcloud_profile_url: null, featured_track_url: null,
+    instagram: null, website: null, booking_email: null, email: null,
+    tracks: [
+      { id: 'st1', title: 'Demo Track A', duration: '3:42', plays: 0, soundcloudUrl: null },
+      { id: 'st2', title: 'Demo Track B', duration: '4:15', plays: 0, soundcloudUrl: null },
+    ],
+    shows: [{ venue: '9:30 Club', city: 'Washington DC', date: '2026-06-15', time: '8:00 PM' }]
+  },
+  {
+    id: 'sample-2', created_at: '2026-01-01T00:00:00Z', is_sample: true,
+    name: 'Demo Band', city: 'Philadelphia', home_scene: 'philly', also_active_in: ['philly', 'dmv'],
+    genres: ['Indie Rock', 'Dream Pop'], verified: false, status: ARTIST_STATUS.APPROVED,
+    bio: 'This is a demo band profile. When real artists join RADR, their profiles will appear here with real music and show info.',
+    color: AVATAR_COLORS[2],
+    soundcloud_profile_url: null, featured_track_url: null,
+    instagram: null, website: null, booking_email: null, email: null,
+    tracks: [
+      { id: 'st3', title: 'Example Song', duration: '4:25', plays: 0, soundcloudUrl: null },
+      { id: 'st4', title: 'Preview Track', duration: '3:40', plays: 0, soundcloudUrl: null },
+    ],
+    shows: [{ venue: 'World Cafe Live', city: 'Philadelphia', date: '2026-06-20', time: '9:00 PM' }]
+  },
+  {
+    id: 'sample-3', created_at: '2026-01-01T00:00:00Z', is_sample: true,
+    name: 'Example Producer', city: 'Richmond', home_scene: 'richmond', also_active_in: ['richmond'],
+    genres: ['Electronic', 'Hip-Hop'], verified: false, status: ARTIST_STATUS.APPROVED,
+    bio: 'A sample electronic producer profile. This placeholder shows what a producer profile looks like on RADR. Not a real artist.',
+    color: AVATAR_COLORS[5],
+    soundcloud_profile_url: null, featured_track_url: null,
+    instagram: null, website: null, booking_email: null, email: null,
+    tracks: [
+      { id: 'st5', title: 'Beat Preview 1', duration: '2:58', plays: 0, soundcloudUrl: null },
+    ],
+    shows: []
+  },
+  {
+    id: 'sample-4', created_at: '2026-01-01T00:00:00Z', is_sample: true,
+    name: 'Preview Artist', city: 'Baltimore', home_scene: 'dmv', also_active_in: ['dmv', 'richmond'],
+    genres: ['Singer-Songwriter', 'Folk'], verified: false, status: ARTIST_STATUS.APPROVED,
+    bio: 'This is a sample singer-songwriter profile. It demonstrates how visiting artist badges work when an artist is active in multiple scenes.',
+    color: AVATAR_COLORS[7],
+    soundcloud_profile_url: null, featured_track_url: null,
+    instagram: null, website: null, booking_email: null, email: null,
+    tracks: [
+      { id: 'st6', title: 'Placeholder Ballad', duration: '4:10', plays: 0, soundcloudUrl: null },
+      { id: 'st7', title: 'Sample Acoustic', duration: '3:35', plays: 0, soundcloudUrl: null },
+    ],
+    shows: [{ venue: 'The Broadberry', city: 'Richmond', date: '2026-07-01', time: '7:00 PM' }]
+  },
+];
+
+/* ═══════════════════════════════════════════
+   SUPABASE HELPERS
+   ═══════════════════════════════════════════ */
+
+// SUPABASE READY — normalize a row into frontend shape
+function normalizeSupabaseArtist(row) {
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    is_sample: false,
+    name: row.name,
+    email: row.email,
+    city: row.city,
+    home_scene: row.home_scene,
+    also_active_in: row.also_active_in || [row.home_scene],
+    genres: row.genres || [],
+    bio: row.bio || '',
+    verified: row.verified || false,
+    status: row.status || ARTIST_STATUS.APPROVED,
+    color: row.color || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+    soundcloud_profile_url: row.soundcloud_profile_url || null,
+    featured_track_url: row.featured_track_url || null,
+    instagram: row.instagram || null,
+    website: row.website || null,
+    booking_email: row.booking_email || null,
+    tracks: row.tracks || [],
+    shows: row.shows || [],
+  };
+}
+
+// SUPABASE READY — fetch all approved artists
+async function fetchApprovedArtists() {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('artists')
+      .select('*')
+      .eq('status', 'approved');
+    if (error) { console.error('[RADR] Supabase fetch error:', error); return []; }
+    return (data || []).map(normalizeSupabaseArtist);
+  } catch (err) {
+    console.error('[RADR] Supabase fetch exception:', err);
+    return [];
+  }
+}
+
+// SUPABASE READY — fetch approved artists by scene
+async function fetchApprovedArtistsByScene(sceneId) {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('artists')
+      .select('*')
+      .eq('status', 'approved')
+      .eq('home_scene', sceneId);
+    if (error) { console.error('[RADR] Supabase scene fetch error:', error); return []; }
+    return (data || []).map(normalizeSupabaseArtist);
+  } catch (err) {
+    console.error('[RADR] Supabase scene fetch exception:', err);
+    return [];
+  }
+}
+
+// SUPABASE READY — submit artist as pending
+async function submitArtistToSupabase(payload) {
+  if (!supabase) return { success: false, error: 'Supabase not configured' };
+  try {
+    const { data, error } = await supabase
+      .from('artists')
+      .insert([{
+        name: payload.name,
+        email: payload.email,
+        city: payload.city,
+        home_scene: payload.home_scene,
+        also_active_in: payload.also_active_in,
+        genres: payload.genres,
+        bio: payload.bio,
+        soundcloud_profile_url: payload.soundcloud_profile_url || null,
+        featured_track_url: payload.featured_track_url || null,
+        instagram: payload.instagram || null,
+        website: payload.website || null,
+        booking_email: payload.booking_email || null,
+        local_presence: payload.local_presence || null,
+        music_links: payload.music_links || null,
+        tracks: payload.tracks || [],
+        shows: payload.shows || [],
+        status: 'pending',
+        is_sample: false,
+        color: payload.color,
+        verified: false,
+      }]);
+    if (error) { console.error('[RADR] Supabase insert error:', error); return { success: false, error: error.message }; }
+    return { success: true, data };
+  } catch (err) {
+    console.error('[RADR] Supabase insert exception:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DATA TRANSFORMATION HELPERS
+   ═══════════════════════════════════════════ */
+const genId = () => '_' + Math.random().toString(36).slice(2, 10);
+const getInitials = (name) => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+const formatPlays = (n) => n >= 1000 ? (n/1000).toFixed(1).replace(/\.0$/,'') + 'K' : String(n);
+const isVisiting = (artist, sceneId) => artist.home_scene !== sceneId && (artist.also_active_in || []).includes(sceneId);
+const pickColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+const sceneName = (id) => SCENES.find(s => s.id === id)?.name || id;
+const getStatusLabel = (artist) => STATUS_LABELS[artist.status] || (artist.verified ? 'Verified Local' : 'Artist');
+const getStatusVariant = (status) => ({ [ARTIST_STATUS.VERIFIED_LOCAL]: 'verified', [ARTIST_STATUS.COMMUNITY_CONFIRMED]: 'community', [ARTIST_STATUS.NEW_ARTIST]: 'newartist', [ARTIST_STATUS.UNDER_REVIEW]: 'review', [ARTIST_STATUS.APPROVED]: 'verified', [ARTIST_STATUS.PENDING]: 'review' }[status] || 'default');
+
+function getSceneArtists(artists, sceneId) { return artists.filter(a => a.home_scene === sceneId || (a.also_active_in || []).includes(sceneId)); }
+function getHomeArtists(artists, sceneId) { return artists.filter(a => a.home_scene === sceneId); }
+function getVisitingArtists(artists, sceneId) { return artists.filter(a => a.home_scene !== sceneId && (a.also_active_in || []).includes(sceneId)); }
+function getSceneShows(artists, sceneId) {
+  return getSceneArtists(artists, sceneId).flatMap(a => (a.shows || []).map(s => ({...s, artist: a.name, artistId: a.id}))).sort((a,b) => new Date(a.date) - new Date(b.date));
+}
+function getSceneStats(artists, sceneId) {
+  const home = getHomeArtists(artists, sceneId);
+  const visiting = getVisitingArtists(artists, sceneId);
+  const shows = getSceneShows(artists, sceneId);
+  return { homeCount: home.length, visitingCount: visiting.length, showCount: shows.length, totalArtists: home.length + visiting.length };
+}
+
+/* ═══════════════════════════════════════════
+   LOCAL STORAGE — UI STATE ONLY
+   Public artists come from Supabase, not localStorage.
+   ═══════════════════════════════════════════ */
+const STORAGE_SCENE = 'radr_selected_scene';
+const STORAGE_SUGGESTED_SCENES = 'radr_suggested_scenes';
+function loadScene() { const s = localStorage.getItem(STORAGE_SCENE); return SCENES.find(sc => sc.id === s) ? s : 'dmv'; }
+function saveScene(id) { localStorage.setItem(STORAGE_SCENE, id); }
+function loadSuggestedScenes() { try { return JSON.parse(localStorage.getItem(STORAGE_SUGGESTED_SCENES) || '[]'); } catch { return []; } }
+function saveSuggestedScenes(list) { localStorage.setItem(STORAGE_SUGGESTED_SCENES, JSON.stringify(list)); }
+
+/* ═══════════════════════════════════════════
+   SHARED COMPONENTS
+   ═══════════════════════════════════════════ */
+
+function Avatar({ name, color, size = 48, onClick, style: extra }) {
+  return (
+    <div onClick={onClick} style={{ width: size, height: size, borderRadius: '50%', background: `linear-gradient(135deg, ${color}, ${color}88)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: size * 0.38, color: '#08080f', cursor: onClick ? 'pointer' : 'default', flexShrink: 0, ...extra }}>
+      {getInitials(name)}
+    </div>
+  );
+}
+
+function Badge({ children, variant = 'default' }) {
+  const colors = {
+    default: { bg: '#1a1a2e', color: TEXT_MED },
+    accent: { bg: ACCENT+'18', color: ACCENT },
+    visiting: { bg: '#e8405018', color: '#e84050' },
+    verified: { bg: ACCENT+'18', color: ACCENT },
+    community: { bg: '#6c5ce718', color: '#a29bfe' },
+    newartist: { bg: '#fdcb6e18', color: '#fdcb6e' },
+    review: { bg: '#e1705518', color: '#e17055' },
+    stream: { bg: '#ff550018', color: '#ff5500' },
+    preview: { bg: '#1a1a2e', color: TEXT_DIM },
+    sample: { bg: '#ff557718', color: '#ff7799' },
+  };
+  const c = colors[variant] || colors.default;
+  return <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, background: c.bg, color: c.color, fontSize: 11, fontWeight: 600, fontFamily: 'Syne, sans-serif', letterSpacing: '0.02em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{children}</span>;
+}
+
+function GenreChips({ genres, active, onSelect }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {genres.map(g => (
+        <button key={g} onClick={() => onSelect && onSelect(g)} style={{ padding: '6px 16px', borderRadius: 20, border: `1px solid ${active === g ? ACCENT : BORDER}`, background: active === g ? ACCENT+'18' : 'transparent', color: active === g ? ACCENT : TEXT_MED, fontSize: 13, fontFamily: 'Syne, sans-serif', fontWeight: 500, cursor: onSelect ? 'pointer' : 'default', transition: 'all 0.2s' }}>{g}</button>
+      ))}
+    </div>
+  );
+}
+
+function Equalizer({ playing }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 16 }}>
+      {[0,1,2,3].map(i => <div key={i} style={{ width: 3, borderRadius: 1.5, background: ACCENT, height: 4, animation: playing ? `eq${i} ${0.4+i*0.15}s ease-in-out infinite alternate` : 'none' }} />)}
+    </div>
+  );
+}
+
+function RadarRings() {
+  return (
+    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 600, height: 600, opacity: 0.08, pointerEvents: 'none' }}>
+      {[1,2,3,4,5].map(i => <div key={i} style={{ position: 'absolute', top: '50%', left: '50%', width: i*120, height: i*120, border: `1px solid ${ACCENT}`, borderRadius: '50%', transform: 'translate(-50%, -50%)' }} />)}
+      <div style={{ position: 'absolute', top: '50%', left: '50%', width: 8, height: 8, background: ACCENT, borderRadius: '50%', transform: 'translate(-50%, -50%)', boxShadow: `0 0 20px ${ACCENT}, 0 0 40px ${ACCENT}44` }} />
+    </div>
+  );
+}
+
+function Card({ children, onClick, style: extra, hover = true }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{
+      background: hovered && hover ? CARD_BG_HOVER : CARD_BG, border: `1px solid ${hovered && hover ? ACCENT+'30' : BORDER}`,
+      borderRadius: 16, padding: 24, cursor: onClick ? 'pointer' : 'default',
+      transform: hovered && hover ? 'translateY(-4px)' : 'none', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+      boxShadow: hovered && hover ? '0 12px 40px rgba(0,229,160,0.06)' : 'none', ...extra
+    }}>{children}</div>
+  );
+}
+
+function Section({ title, subtitle, children, action, style: extra }) {
+  return (
+    <section style={{ marginBottom: 56, ...extra }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em' }}>{title}</h2>
+          {subtitle && <p style={{ fontSize: 14, color: TEXT_DIM, marginTop: 4 }}>{subtitle}</p>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Modal({ open, onClose, children, title }) {
+  if (!open) return null;
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#12121f', border: `1px solid ${BORDER}`, borderRadius: 20, padding: 32, maxWidth: 500, width: '100%', maxHeight: '85vh', overflowY: 'auto', animation: 'fadeIn 0.2s ease-out' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <h3 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 20 }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: TEXT_DIM, fontSize: 20, cursor: 'pointer', padding: 4 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   EARLY ACCESS DISCLAIMER
+   ═══════════════════════════════════════════ */
+function EarlyAccessDisclaimer() {
+  return (
+    <div style={{ padding: '10px 20px', background: '#fdcb6e12', border: `1px solid #fdcb6e25`, borderRadius: 10, marginBottom: 24, fontSize: 13, color: '#fdcb6e', fontFamily: 'DM Sans, sans-serif', lineHeight: 1.5 }}>
+      RADR is currently onboarding artists. Some profiles shown are sample/demo profiles while the platform is in early access.
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SCENE SUMMARY BAR
+   ═══════════════════════════════════════════ */
+function SceneSummaryBar({ scene, artists }) {
+  const stats = getSceneStats(artists, scene.id);
+  return (
+    <div style={{ background: CARD_BG, borderBottom: `1px solid ${BORDER}`, padding: '10px 24px', marginTop: 64 }}>
+      <div className="scene-bar-inner" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 20, fontSize: 13, color: TEXT_MED }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }} />
+          <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, color: ACCENT }}>{scene.name} Scene</span>
+        </span>
+        <span style={{ color: TEXT_DIM }}>·</span>
+        <span>{stats.totalArtists} artist{stats.totalArtists !== 1 ? 's' : ''}</span>
+        {stats.visitingCount > 0 && <><span style={{ color: TEXT_DIM }}>·</span><span>{stats.visitingCount} visiting</span></>}
+        <span style={{ color: TEXT_DIM }}>·</span>
+        <span>{stats.showCount} upcoming show{stats.showCount !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SCENE SELECTOR
+   ═══════════════════════════════════════════ */
+function SceneSelector({ current, onChange, artists, onSuggestScene }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => { const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
+  const scene = SCENES.find(s => s.id === current);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} style={{ background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 16px', color: ACCENT, fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }} />
+        {scene?.name || 'Scenes'}
+        <span style={{ fontSize: 10, opacity: 0.7 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, background: '#12121f', border: `1px solid ${BORDER}`, borderRadius: 12, padding: 8, minWidth: 280, zIndex: 1000, boxShadow: '0 16px 48px rgba(0,0,0,0.5)', animation: 'fadeIn 0.15s ease-out' }}>
+          <div style={{ padding: '8px 12px', fontSize: 11, color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Switch Scene</div>
+          {SCENES.map(s => {
+            const st = getSceneStats(artists, s.id);
+            return (
+              <button key={s.id} onClick={() => { onChange(s.id); setOpen(false); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', textAlign: 'left', padding: '10px 12px', background: s.id === current ? ACCENT+'10' : 'transparent', border: 'none', borderRadius: 8, color: s.id === current ? ACCENT : '#e8e8ec', fontSize: 14, fontFamily: 'Syne, sans-serif', fontWeight: s.id === current ? 600 : 400, cursor: 'pointer' }}
+                onMouseEnter={e => { if (s.id !== current) e.currentTarget.style.background = '#1a1a2e'; }} onMouseLeave={e => { if (s.id !== current) e.currentTarget.style.background = 'transparent'; }}>
+                <div>{s.name}<span style={{ display: 'block', fontSize: 11, color: TEXT_DIM, marginTop: 1 }}>{s.cities.slice(0,3).join(', ')}</span></div>
+                <span style={{ fontSize: 11, color: TEXT_DIM }}>{st.totalArtists}</span>
+              </button>
+            );
+          })}
+          <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 8, paddingTop: 8 }}>
+            <button onClick={() => { onSuggestScene(); setOpen(false); }} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 'none', borderRadius: 8, color: ACCENT, fontSize: 13, fontFamily: 'Syne, sans-serif', fontWeight: 600, cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#1a1a2e'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              + Suggest a Scene
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   NAV
+   ═══════════════════════════════════════════ */
+function Nav({ page, setPage, currentScene, setCurrentScene, artists, onSuggestScene }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  useEffect(() => { const h = () => setScrolled(window.scrollY > 20); window.addEventListener('scroll', h); return () => window.removeEventListener('scroll', h); }, []);
+  const links = [{ id: 'home', label: 'Home' },{ id: 'discover', label: 'Discover' },{ id: 'scene', label: 'Scenes' },{ id: 'submit', label: 'Join' }];
+  return (
+    <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: scrolled ? '#08080fdd' : 'transparent', backdropFilter: scrolled ? 'blur(20px)' : 'none', borderBottom: scrolled ? `1px solid ${BORDER}` : '1px solid transparent', transition: 'all 0.3s' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setPage('home')}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${ACCENT}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }} />
+        </div>
+        <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 20, letterSpacing: '-0.02em' }}>RADR</span>
+      </div>
+      <div className="nav-links-desktop" style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
+        {links.map(l => (
+          <button key={l.id} onClick={() => { setPage(l.id); setMobileMenu(false); }} style={{ background: 'none', border: 'none', color: page === l.id ? '#fff' : TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: page === l.id ? 600 : 400, fontSize: 14, cursor: 'pointer', padding: '4px 0', borderBottom: page === l.id ? `2px solid ${ACCENT}` : '2px solid transparent' }}>{l.label}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <SceneSelector current={currentScene} onChange={setCurrentScene} artists={artists} onSuggestScene={onSuggestScene} />
+        <button className="mobile-menu-btn" onClick={() => setMobileMenu(!mobileMenu)} style={{ display: 'none', background: 'none', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer' }}>☰</button>
+      </div>
+      {mobileMenu && (
+        <div style={{ position: 'absolute', top: 64, left: 0, right: 0, background: '#0c0c18', borderBottom: `1px solid ${BORDER}`, padding: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 99 }}>
+          {links.map(l => <button key={l.id} onClick={() => { setPage(l.id); setMobileMenu(false); }} style={{ background: page === l.id ? ACCENT+'10' : 'none', border: 'none', color: page === l.id ? ACCENT : '#e8e8ec', fontFamily: 'Syne, sans-serif', fontWeight: 500, fontSize: 16, cursor: 'pointer', padding: '12px 16px', borderRadius: 8, textAlign: 'left' }}>{l.label}</button>)}
+        </div>
+      )}
+    </nav>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   TRACK ROW / ARTIST CARD / SHOW ROW
+   ═══════════════════════════════════════════ */
+function TrackRow({ track, index, artist, isPlaying, onPlay }) {
+  const hasSC = !!track.soundcloudUrl;
+  return (
+    <div onClick={() => onPlay(track, artist)} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', borderRadius: 10, cursor: 'pointer', transition: 'background 0.15s', background: isPlaying ? ACCENT+'10' : 'transparent' }}
+      onMouseEnter={e => { if(!isPlaying) e.currentTarget.style.background = '#1a1a2e'; }} onMouseLeave={e => { if(!isPlaying) e.currentTarget.style.background = 'transparent'; }}>
+      <span style={{ width: 28, textAlign: 'center', fontFamily: 'Syne, sans-serif', fontSize: 13, color: isPlaying ? ACCENT : TEXT_DIM, fontWeight: 600 }}>
+        {isPlaying ? <Equalizer playing={true} /> : (index + 1)}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 500, color: isPlaying ? ACCENT : '#e8e8ec', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {track.title}
+          {hasSC ? <Badge variant="stream">Full Stream</Badge> : <Badge variant="preview">Preview</Badge>}
+        </div>
+      </div>
+      <span style={{ fontSize: 12, color: TEXT_DIM }}>{formatPlays(track.plays)}</span>
+      <span style={{ fontSize: 12, color: TEXT_DIM, width: 40, textAlign: 'right' }}>{track.duration}</span>
+    </div>
+  );
+}
+
+function ArtistCard({ artist, sceneId, onSelect }) {
+  const visiting = isVisiting(artist, sceneId);
+  const homeSceneName = sceneName(artist.home_scene);
+  const statusLabel = artist.is_sample ? 'Sample Profile' : getStatusLabel(artist);
+  const statusVariant = artist.is_sample ? 'sample' : getStatusVariant(artist.status);
+  return (
+    <Card onClick={onSelect} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative' }}>
+      {artist.is_sample && <div style={{ position: 'absolute', top: 12, right: 12 }}><Badge variant="sample">Demo</Badge></div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <Avatar name={artist.name} color={artist.color} size={52} style={artist.is_sample ? { opacity: 0.7 } : {}} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 16 }}>{artist.name}</span>
+            {!artist.is_sample && <Badge variant={statusVariant}>{statusLabel}</Badge>}
+          </div>
+          <div style={{ fontSize: 13, color: TEXT_DIM, marginTop: 2 }}>
+            {artist.city}
+            {visiting && <span style={{ color: '#e84050' }}> · From {homeSceneName}</span>}
+          </div>
+        </div>
+        {visiting && !artist.is_sample && <Badge variant="visiting">Visiting</Badge>}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{artist.genres.map(g => <Badge key={g}>{g}</Badge>)}</div>
+      <div style={{ fontSize: 13, color: TEXT_MED, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{artist.bio}</div>
+      <div style={{ fontSize: 12, color: TEXT_DIM, display: 'flex', gap: 12 }}>
+        <span>{(artist.tracks || []).length} track{(artist.tracks || []).length !== 1 ? 's' : ''}</span>
+        {(artist.tracks || []).some(t => t.soundcloudUrl) && <span style={{ color: '#ff5500' }}>● streaming</span>}
+        {artist.featured_track_url && <span style={{ color: '#ff5500' }}>● featured track</span>}
+        {(artist.shows || []).length > 0 && <span>{artist.shows.length} show{artist.shows.length !== 1 ? 's' : ''}</span>}
+      </div>
+    </Card>
+  );
+}
+
+function ShowRow({ show, onArtistClick }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 0', borderBottom: `1px solid ${BORDER}` }}>
+      <div style={{ width: 50, textAlign: 'center' }}>
+        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 16, color: ACCENT }}>{new Date(show.date+'T00:00:00').getDate()}</div>
+        <div style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', fontFamily: 'Syne, sans-serif' }}>{new Date(show.date+'T00:00:00').toLocaleDateString('en-US',{month:'short'})}</div>
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, fontSize: 14 }}><span style={{ cursor: onArtistClick ? 'pointer' : 'default', color: ACCENT }} onClick={e => { e.stopPropagation(); onArtistClick && onArtistClick(show.artistId); }}>{show.artist}</span></div>
+        <div style={{ fontSize: 13, color: TEXT_DIM }}>{show.venue} · {show.city}</div>
+      </div>
+      <div style={{ fontSize: 12, color: TEXT_DIM }}>{show.time}</div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   MINI PLAYER
+   ═══════════════════════════════════════════ */
+function MiniPlayer({ track, artist, playing, onToggle, progress, onProgressChange }) {
+  const iframeRef = useRef(null); const widgetRef = useRef(null);
+  const hasSC = track && !!track.soundcloudUrl;
+  useEffect(() => { if (!hasSC || !iframeRef.current) return; const widget = SC.Widget(iframeRef.current); widgetRef.current = widget; widget.bind(SC.Widget.Events.READY, () => { widget.bind(SC.Widget.Events.PLAY_PROGRESS, (data) => { onProgressChange(data.relativePosition * 100); }); widget.bind(SC.Widget.Events.FINISH, () => { onToggle(false); }); if (playing) widget.play(); }); return () => { widgetRef.current = null; }; }, [track?.soundcloudUrl]);
+  useEffect(() => { if (!hasSC || !widgetRef.current) return; if (playing) widgetRef.current.play(); else widgetRef.current.pause(); }, [playing, hasSC]);
+  if (!track) return null;
+  return (
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#0c0c18ee', backdropFilter: 'blur(20px)', borderTop: `1px solid ${BORDER}`, zIndex: 200 }}>
+      {hasSC && <iframe ref={iframeRef} key={track.soundcloudUrl} src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(track.soundcloudUrl)}&color=%2300e5a0&auto_play=${playing}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`} width="0" height="0" frameBorder="0" allow="autoplay" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />}
+      <div style={{ height: 3, background: BORDER }}><div style={{ width: `${progress}%`, height: '100%', background: ACCENT, transition: hasSC ? 'none' : 'width 1s linear', borderRadius: 2 }} /></div>
+      <div style={{ height: 68, display: 'flex', alignItems: 'center', padding: '0 24px', gap: 16 }}>
+        <Avatar name={artist.name} color={artist.color} size={42} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</div>
+          <div style={{ fontSize: 12, color: TEXT_DIM, display: 'flex', alignItems: 'center', gap: 6 }}>{artist.name}{hasSC ? <span style={{ color: '#ff5500', fontSize: 10, fontWeight: 700 }}>● Full Stream</span> : <span style={{ fontSize: 10, color: TEXT_DIM }}>● Preview</span>}</div>
+        </div>
+        <Equalizer playing={playing} />
+        <button onClick={() => onToggle()} style={{ width: 40, height: 40, borderRadius: '50%', background: ACCENT, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16, color: '#08080f', fontWeight: 700, flexShrink: 0 }}>{playing ? '❚❚' : '▶'}</button>
+        <span style={{ fontSize: 12, color: TEXT_DIM, width: 40, textAlign: 'right' }}>{track.duration}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   REPORT PROFILE MODAL
+   ═══════════════════════════════════════════ */
+function ReportModal({ open, onClose, artistName }) {
+  const [reason, setReason] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const inputStyle = { width: '100%', padding: '12px 16px', background: '#0a0a16', border: `1px solid ${BORDER}`, borderRadius: 10, color: '#e8e8ec', fontSize: 14, outline: 'none' };
+  if (submitted) return (
+    <Modal open={open} onClose={() => { setSubmitted(false); setReason(''); onClose(); }} title="Report Submitted">
+      <p style={{ color: TEXT_MED, fontSize: 14, lineHeight: 1.6 }}>Thank you. Your report helps keep RADR focused on real artists and real scenes. We'll review it.</p>
+    </Modal>
+  );
+  return (
+    <Modal open={open} onClose={onClose} title={`Report ${artistName || 'Profile'}`}>
+      <p style={{ color: TEXT_DIM, fontSize: 13, marginBottom: 20 }}>Help protect the credibility of your scene. Reports are confidential.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        {REPORT_REASONS.map(r => (
+          <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: reason === r.id ? ACCENT+'10' : CARD_BG, border: `1px solid ${reason === r.id ? ACCENT+'30' : BORDER}`, borderRadius: 10, cursor: 'pointer' }}>
+            <input type="radio" name="reason" checked={reason === r.id} onChange={() => setReason(r.id)} style={{ accentColor: ACCENT }} />
+            <span style={{ fontSize: 14 }}>{r.label}</span>
+          </label>
+        ))}
+      </div>
+      <textarea style={{...inputStyle, minHeight: 60, resize: 'vertical', marginBottom: 16}} placeholder="Optional details..." />
+      <button onClick={() => reason && setSubmitted(true)} style={{ width: '100%', padding: '12px 24px', background: reason ? ACCENT : BORDER, border: 'none', borderRadius: 10, color: reason ? '#08080f' : TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, cursor: reason ? 'pointer' : 'not-allowed' }}>Submit Report</button>
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SUGGEST A SCENE MODAL
+   ═══════════════════════════════════════════ */
+function SuggestSceneModal({ open, onClose, onSubmit }) {
+  const [form, setForm] = useState({ name: '', country: '', description: '', links: '' });
+  const [submitted, setSubmitted] = useState(false);
+  const inputStyle = { width: '100%', padding: '12px 16px', background: '#0a0a16', border: `1px solid ${BORDER}`, borderRadius: 10, color: '#e8e8ec', fontSize: 14, outline: 'none' };
+  const labelStyle = { display: 'block', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 13, marginBottom: 8, color: TEXT_MED };
+  const focus = (e) => e.target.style.borderColor = ACCENT;
+  const blur = (e) => e.target.style.borderColor = BORDER;
+
+  const handleSubmit = () => {
+    if (!form.name) return;
+    onSubmit({ id: genId(), name: form.name, country: form.country || 'US', description: form.description, links: form.links, status: 'pending', submittedAt: new Date().toISOString() });
+    setSubmitted(true);
+  };
+
+  if (submitted) return (
+    <Modal open={open} onClose={() => { setSubmitted(false); setForm({ name: '', country: '', description: '', links: '' }); onClose(); }} title="Scene Suggested">
+      <p style={{ color: TEXT_MED, fontSize: 14, lineHeight: 1.6, marginBottom: 8 }}>Thanks for suggesting <strong>{form.name}</strong>. Suggested scenes are reviewed before going live — we look for local artist activity and real venues.</p>
+      <p style={{ color: TEXT_DIM, fontSize: 13 }}>Want to help? Join RADR as an artist in this area to build momentum.</p>
+    </Modal>
+  );
+
+  return (
+    <Modal open={open} onClose={onClose} title="Suggest a Scene">
+      <p style={{ color: TEXT_DIM, fontSize: 13, marginBottom: 20 }}>Scenes go live after review or when enough artists from the area join RADR. Use the format: City / Region.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div><label style={labelStyle}>Scene Name (City / Region) *</label><input style={inputStyle} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Los Angeles / Southern California" onFocus={focus} onBlur={blur} /></div>
+        <div><label style={labelStyle}>Country</label><input style={inputStyle} value={form.country} onChange={e => setForm(f => ({...f, country: e.target.value}))} placeholder="US" onFocus={focus} onBlur={blur} /></div>
+        <div><label style={labelStyle}>Description (optional)</label><textarea style={{...inputStyle, minHeight: 60, resize: 'vertical'}} value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} placeholder="What makes this scene unique?" onFocus={focus} onBlur={blur} /></div>
+        <div><label style={labelStyle}>Known artists, venues, or links (optional)</label><textarea style={{...inputStyle, minHeight: 50, resize: 'vertical'}} value={form.links} onChange={e => setForm(f => ({...f, links: e.target.value}))} placeholder="Help us understand the scene" onFocus={focus} onBlur={blur} /></div>
+        <button onClick={handleSubmit} style={{ width: '100%', padding: '14px 24px', background: form.name ? ACCENT : BORDER, border: 'none', borderRadius: 10, color: form.name ? '#08080f' : TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 15, cursor: form.name ? 'pointer' : 'not-allowed' }}>Suggest This Scene</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   LANDING PAGE (true homepage)
+   ═══════════════════════════════════════════ */
+function LandingPage({ artists, setPage, setCurrentScene, onSuggestScene }) {
+  const featuredScenes = SCENES.filter(s => getSceneStats(artists, s.id).totalArtists > 0);
+
+  return (
+    <div>
+      <div style={{ position: 'relative', minHeight: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '120px 24px 60px' }}>
+        <RadarRings />
+        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: 700 }}>
+          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(44px, 9vw, 80px)', lineHeight: 1.0, letterSpacing: '-0.03em', marginBottom: 20, textTransform: 'uppercase' }}>Hear Your City</h1>
+          <p style={{ fontSize: 20, color: TEXT_MED, lineHeight: 1.5, maxWidth: 480, margin: '0 auto 40px' }}>Discover the artists around you. Tap into your local scene.</p>
+          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => setPage('scene')} style={{ padding: '14px 32px', background: ACCENT, border: 'none', borderRadius: 10, color: '#08080f', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: `0 4px 20px ${ACCENT}44` }}>Explore Scenes</button>
+            <button onClick={() => setPage('discover')} style={{ padding: '14px 32px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 10, color: '#e8e8ec', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>Discover Artists</button>
+            <button onClick={() => setPage('submit')} style={{ padding: '14px 32px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 10, color: '#e8e8ec', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>Join as Artist</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px' }}>
+        <Section title="Explore Scenes" subtitle="Real artists. Real places. Real music.">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+            {featuredScenes.map(s => {
+              const st = getSceneStats(artists, s.id);
+              return (
+                <Card key={s.id} onClick={() => { setCurrentScene(s.id); setPage('scene'); }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }} />
+                    <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18 }}>{s.name}</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: TEXT_MED, lineHeight: 1.5, marginBottom: 14, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.description}</p>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 12, color: TEXT_DIM }}>
+                    <span>{st.totalArtists} artist{st.totalArtists !== 1 ? 's' : ''}</span>
+                    <span>{st.showCount} show{st.showCount !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 12 }}>{s.cities.slice(0,3).map(c => <Badge key={c}>{c}</Badge>)}</div>
+                </Card>
+              );
+            })}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 24 }}>
+            <button onClick={onSuggestScene} style={{ background: 'none', border: 'none', color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontSize: 13, cursor: 'pointer' }}>
+              Don't see your city? <span style={{ color: ACCENT }}>Suggest it.</span>
+            </button>
+          </div>
+        </Section>
+
+        <Section title="Why RADR" style={{ textAlign: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 24 }}>
+            {[
+              { icon: '◎', title: 'Scene-First Discovery', desc: 'Music organized by real regional scenes and local activity, not algorithms. Find artists who play the same venues and share the same stages.' },
+              { icon: '♫', title: 'Stream Full Tracks', desc: 'Artists link their SoundCloud for instant listening. No 30-second previews, no paywalls — hear the real thing.' },
+              { icon: '⚑', title: 'Real Artists, Real Scenes', desc: 'Every profile represents a real artist active in their local scene. Community trust and local presence keep RADR credible.' },
+            ].map((item, i) => (
+              <Card key={i} hover={false} style={{ textAlign: 'center', padding: 32 }}>
+                <div style={{ fontSize: 32, marginBottom: 16, color: ACCENT }}>{item.icon}</div>
+                <h3 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, marginBottom: 12 }}>{item.title}</h3>
+                <p style={{ fontSize: 14, color: TEXT_MED, lineHeight: 1.6 }}>{item.desc}</p>
+              </Card>
+            ))}
+          </div>
+        </Section>
+
+        <div style={{ textAlign: 'center', padding: '56px 20px', background: `linear-gradient(135deg, ${ACCENT}08, ${ACCENT}04)`, borderRadius: 20, border: `1px solid ${ACCENT}15`, marginBottom: 56 }}>
+          <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 28, marginBottom: 12 }}>Are you an artist?</h2>
+          <p style={{ color: TEXT_MED, fontSize: 16, maxWidth: 420, margin: '0 auto 28px' }}>Add yourself to your scene and start getting discovered. Built for real artists in real places.</p>
+          <button onClick={() => setPage('submit')} style={{ padding: '14px 32px', background: ACCENT, border: 'none', borderRadius: 10, color: '#08080f', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>Join RADR</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   DISCOVER PAGE
+   ═══════════════════════════════════════════ */
+function DiscoverPage({ scene, artists, setPage, setSelectedArtist, onPlay, currentTrack, playing }) {
+  const [genre, setGenre] = useState(null);
+  const [sort, setSort] = useState('trending');
+  const allArtists = getSceneArtists(artists, scene.id);
+  let filtered = genre ? allArtists.filter(a => a.genres.includes(genre)) : allArtists;
+  if (sort === 'trending') filtered = [...filtered].sort((a,b) => (b.tracks||[]).reduce((s,t)=>s+t.plays,0) - (a.tracks||[]).reduce((s,t)=>s+t.plays,0));
+  if (sort === 'newest') filtered = [...filtered].reverse();
+  const filteredHome = filtered.filter(a => a.home_scene === scene.id);
+  const filteredVisiting = filtered.filter(a => a.home_scene !== scene.id);
+  const goArtist = (a) => { setSelectedArtist(a); setPage('artist'); };
+  useEffect(() => { setGenre(null); }, [scene.id]);
+  const hasSamples = filtered.some(a => a.is_sample);
+
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '100px 24px 120px' }}>
+      <div style={{ marginBottom: 40 }}>
+        <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 36, marginBottom: 8 }}>Discover</h1>
+        <p style={{ color: TEXT_DIM, fontSize: 16 }}>Artists in the {scene.name} scene</p>
+      </div>
+      {hasSamples && <EarlyAccessDisclaimer />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
+        <GenreChips genres={['All', ...GENRES]} active={genre || 'All'} onSelect={g => setGenre(g === 'All' ? null : g)} />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {['trending','newest'].map(s => (
+            <button key={s} onClick={() => setSort(s)} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${sort === s ? ACCENT : BORDER}`, background: sort === s ? ACCENT+'15' : 'transparent', color: sort === s ? ACCENT : TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 500, fontSize: 12, cursor: 'pointer', textTransform: 'capitalize' }}>{s}</button>
+          ))}
+        </div>
+      </div>
+      {filteredHome.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20, marginBottom: 48 }}>{filteredHome.map(a => <ArtistCard key={a.id} artist={a} sceneId={scene.id} onSelect={() => goArtist(a)} />)}</div>}
+      {filteredVisiting.length > 0 && <Section title="Visiting Artists" subtitle={`From other scenes, touring through ${scene.name}`}><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>{filteredVisiting.map(a => <ArtistCard key={a.id} artist={a} sceneId={scene.id} onSelect={() => goArtist(a)} />)}</div></Section>}
+      {filtered.length === 0 && <div style={{ textAlign: 'center', padding: 60, color: TEXT_DIM }}><p style={{ fontFamily: 'Syne, sans-serif', fontSize: 18 }}>No artists in {scene.name} yet.</p><p style={{ fontSize: 14, marginTop: 8 }}>Be the first — <span style={{ color: ACCENT, cursor: 'pointer' }} onClick={() => setPage('submit')}>join RADR</span>.</p></div>}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SCENE PAGE
+   ═══════════════════════════════════════════ */
+function ScenePage({ scene, artists, setPage, setSelectedArtist, onPlay, currentTrack, playing }) {
+  const homeArtists = getHomeArtists(artists, scene.id);
+  const visiting = getVisitingArtists(artists, scene.id);
+  const shows = getSceneShows(artists, scene.id);
+  const allArtists = getSceneArtists(artists, scene.id);
+  const trendingTracks = allArtists.flatMap(a => (a.tracks||[]).map(t => ({...t, artist: a}))).sort((a,b) => b.plays - a.plays).slice(0, 5);
+  const sceneGenres = [...new Set(allArtists.flatMap(a => a.genres))];
+  const goArtist = (a) => { setSelectedArtist(a); setPage('artist'); };
+  const hasSamples = allArtists.some(a => a.is_sample);
+
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '100px 24px 120px' }}>
+      <div style={{ position: 'relative', padding: '48px 0 40px', marginBottom: 48 }}>
+        <div style={{ position: 'absolute', top: 0, right: 0, opacity: 0.04 }}>
+          {[1,2,3].map(i => <div key={i} style={{ width: i*100, height: i*100, border: `1px solid ${ACCENT}`, borderRadius: '50%', position: 'absolute', top: '50%', right: 0, transform: 'translateY(-50%)' }} />)}
+        </div>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 13, color: ACCENT, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>Now Playing In</div>
+          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(32px, 6vw, 48px)', letterSpacing: '-0.02em', marginBottom: 12 }}>{scene.name}</h1>
+          <p style={{ fontSize: 16, color: TEXT_MED, lineHeight: 1.6, maxWidth: 600 }}>Discover the artists shaping the {scene.name} sound.</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>{scene.cities.map(c => <Badge key={c}>{c}</Badge>)}</div>
+        </div>
+      </div>
+      {hasSamples && <EarlyAccessDisclaimer />}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 48 }}>
+        {[{ label: 'Home Artists', value: homeArtists.length },{ label: 'Visiting', value: visiting.length },{ label: 'Shows', value: shows.length },{ label: 'Genres', value: sceneGenres.length }].map(s => (
+          <Card key={s.label} hover={false} style={{ textAlign: 'center', padding: 20 }}>
+            <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 28, color: ACCENT }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: TEXT_DIM, marginTop: 4, fontFamily: 'Syne, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</div>
+          </Card>
+        ))}
+      </div>
+      {sceneGenres.length > 0 && <Section title="Genres in This Scene"><GenreChips genres={sceneGenres} /></Section>}
+      {homeArtists.length > 0 ? (
+        <Section title="Featured Artists" action={<button onClick={() => setPage('discover')} style={{ background: 'none', border: 'none', color: ACCENT, fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View all →</button>}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>{homeArtists.slice(0,4).map(a => <ArtistCard key={a.id} artist={a} sceneId={scene.id} onSelect={() => goArtist(a)} />)}</div>
+        </Section>
+      ) : (
+        <Section title="Artists">
+          <Card hover={false} style={{ textAlign: 'center', padding: 48 }}>
+            <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, color: TEXT_DIM, marginBottom: 12 }}>No artists in this scene yet.</p>
+            <p style={{ fontSize: 14, color: TEXT_DIM, marginBottom: 20 }}>Be the first to represent {scene.name} on RADR.</p>
+            <button onClick={() => setPage('submit')} style={{ padding: '12px 28px', background: ACCENT, border: 'none', borderRadius: 10, color: '#08080f', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Join RADR</button>
+          </Card>
+        </Section>
+      )}
+      {trendingTracks.length > 0 && <Section title="Trending in Your Scene"><Card hover={false} style={{ padding: 8 }}>{trendingTracks.map((t,i) => <TrackRow key={t.id||t.title} track={t} index={i} artist={t.artist} isPlaying={currentTrack?.id === t.id && playing} onPlay={() => onPlay(t, t.artist)} />)}</Card></Section>}
+      {shows.length > 0 && <Section title="Upcoming Shows"><Card hover={false}>{shows.map((s,i) => <ShowRow key={i} show={s} onArtistClick={id => { const ar = artists.find(a => a.id === id); if(ar) goArtist(ar); }} />)}</Card></Section>}
+      {visiting.length > 0 && <Section title="Visiting Artists" subtitle={`From other scenes, touring through ${scene.name}`}><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>{visiting.map(a => <ArtistCard key={a.id} artist={a} sceneId={scene.id} onSelect={() => goArtist(a)} />)}</div></Section>}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   ARTIST PROFILE PAGE
+   ═══════════════════════════════════════════ */
+function ArtistProfilePage({ artist, scene, artists, setPage, setSelectedArtist, onPlay, currentTrack, playing }) {
+  const [reportOpen, setReportOpen] = useState(false);
+  if (!artist) return null;
+  const visiting = isVisiting(artist, scene.id);
+  const homeScene = SCENES.find(s => s.id === artist.home_scene);
+  const activeSceneNames = (artist.also_active_in || []).filter(s => s !== artist.home_scene).map(sceneName);
+  const related = artists.filter(a => a.id !== artist.id && !a.is_sample && (a.home_scene === artist.home_scene || a.genres.some(g => artist.genres.includes(g)))).slice(0, 3);
+  const goArtist = (a) => { setSelectedArtist(a); window.scrollTo(0,0); };
+  const statusLabel = artist.is_sample ? 'Sample Profile' : getStatusLabel(artist);
+  const statusVariant = artist.is_sample ? 'sample' : getStatusVariant(artist.status);
+  const hasFeaturedTrack = !!artist.featured_track_url;
+  const hasSCProfile = !!artist.soundcloud_profile_url;
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '100px 24px 120px' }}>
+      <button onClick={() => setPage('discover')} style={{ background: 'none', border: 'none', color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontSize: 13, cursor: 'pointer', marginBottom: 32, display: 'flex', alignItems: 'center', gap: 6 }}>← Back to Discover</button>
+      {artist.is_sample && (
+        <div style={{ padding: '12px 20px', background: '#ff557712', border: `1px solid #ff557730`, borderRadius: 10, marginBottom: 24, fontSize: 13, color: '#ff7799', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 18 }}>⚠</span>
+          <span>This is a sample/demo profile. It does not represent a real artist.</span>
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginBottom: 32, flexWrap: 'wrap' }}>
+        <Avatar name={artist.name} color={artist.color} size={96} style={artist.is_sample ? { opacity: 0.7 } : {}} />
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+            <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, letterSpacing: '-0.02em' }}>{artist.name}</h1>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            <Badge variant={statusVariant}>{statusLabel}</Badge>
+            {visiting && <Badge variant="visiting">Visiting Artist</Badge>}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>{artist.genres.map(g => <Badge key={g}>{g}</Badge>)}</div>
+          <p style={{ fontSize: 15, color: TEXT_MED, lineHeight: 1.7 }}>{artist.bio}</p>
+        </div>
+      </div>
+      <Card hover={false} style={{ marginBottom: 32, padding: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
+          <div><div style={{ fontSize: 11, color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>City</div><div style={{ fontSize: 14 }}>{artist.city}</div></div>
+          <div><div style={{ fontSize: 11, color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Home Scene</div><div style={{ fontSize: 14, color: ACCENT }}>{homeScene?.name}</div></div>
+          {activeSceneNames.length > 0 && <div><div style={{ fontSize: 11, color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Also Active In</div><div style={{ fontSize: 14 }}>{activeSceneNames.join(', ')}</div></div>}
+          <div><div style={{ fontSize: 11, color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Status</div><div style={{ fontSize: 14 }}>{statusLabel}</div></div>
+        </div>
+      </Card>
+      {/* SoundCloud embed or profile link — SUPABASE READY */}
+      {hasFeaturedTrack && (
+        <Card hover={false} style={{ marginBottom: 32, padding: 0, overflow: 'hidden' }}>
+          <iframe width="100%" height="166" scrolling="no" frameBorder="no" allow="autoplay"
+            src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(artist.featured_track_url)}&color=%2300e5a0&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false`} />
+        </Card>
+      )}
+      {!hasFeaturedTrack && hasSCProfile && (
+        <Card hover={false} style={{ marginBottom: 32, padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ color: '#ff5500', fontSize: 24 }}>☁</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 14 }}>Listen on SoundCloud</div>
+              <div style={{ fontSize: 12, color: TEXT_DIM }}>This artist has linked their SoundCloud profile.</div>
+            </div>
+            <a href={artist.soundcloud_profile_url} target="_blank" rel="noopener noreferrer" style={{ padding: '8px 20px', background: '#ff5500', border: 'none', borderRadius: 8, color: '#fff', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Open</a>
+          </div>
+        </Card>
+      )}
+      {!artist.is_sample && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 48, flexWrap: 'wrap' }}>
+          <button style={{ padding: '12px 28px', background: ACCENT, border: 'none', borderRadius: 10, color: '#08080f', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Support Artist</button>
+          <button style={{ padding: '12px 28px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 10, color: '#e8e8ec', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Book for Show</button>
+          <button onClick={() => setReportOpen(true)} style={{ padding: '12px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 10, color: TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 500, fontSize: 12, cursor: 'pointer', marginLeft: 'auto' }}>Report Profile</button>
+        </div>
+      )}
+      <Section title="Tracks">
+        {(artist.tracks || []).length > 0 ? (
+          <Card hover={false} style={{ padding: 8 }}>{artist.tracks.map((t, i) => <TrackRow key={t.id||t.title} track={t} index={i} artist={artist} isPlaying={currentTrack?.id === t.id && playing} onPlay={() => onPlay(t, artist)} />)}</Card>
+        ) : (
+          <Card hover={false} style={{ textAlign: 'center', padding: 40, color: TEXT_DIM }}><p style={{ fontFamily: 'Syne, sans-serif' }}>No tracks yet — profile only.</p></Card>
+        )}
+      </Section>
+      {(artist.shows || []).length > 0 && <Section title="Upcoming Shows"><Card hover={false}>{artist.shows.map((s,i) => <ShowRow key={i} show={{...s, artist: artist.name, artistId: artist.id}} />)}</Card></Section>}
+      {related.length > 0 && (
+        <Section title="More from This Scene" subtitle={`Artists in ${homeScene?.name}`}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+            {related.map(a => <Card key={a.id} onClick={() => goArtist(a)}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><Avatar name={a.name} color={a.color} size={40} /><div><div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 14 }}>{a.name}</div><div style={{ fontSize: 12, color: TEXT_DIM }}>{a.city} · {a.genres.slice(0,2).join(', ')}</div></div></div></Card>)}
+          </div>
+        </Section>
+      )}
+      <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} artistName={artist.name} />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SUBMIT / JOIN PAGE
+   SUPABASE READY — submits to Supabase when
+   configured, otherwise logs to console as demo.
+   ═══════════════════════════════════════════ */
+function SubmitPage({ scenes, onSuggestScene }) {
+  const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [form, setForm] = useState({
+    name: '', type: 'solo', email: '', city: '', home_scene: '',
+    also_active_in: [], genres: [], bio: '',
+    soundcloud_profile_url: '', featured_track_url: '',
+    music_links: '', local_presence: '',
+    instagram: '', website: '', booking_email: '',
+    upcoming_shows: '', human_confirmed: false, live_confirmed: false,
+  });
+  const [tracks, setTracks] = useState([]);
+  const [trackInput, setTrackInput] = useState({ title: '', soundcloudUrl: '', duration: '' });
+  const update = (field, value) => setForm(f => ({...f, [field]: value}));
+
+  const addTrack = () => {
+    if (!trackInput.title) return;
+    setTracks(t => [...t, { id: genId(), title: trackInput.title, soundcloudUrl: trackInput.soundcloudUrl || null, duration: trackInput.duration || '3:30', plays: 0 }]);
+    setTrackInput({ title: '', soundcloudUrl: '', duration: '' });
+  };
+  const removeTrack = (id) => setTracks(t => t.filter(tr => tr.id !== id));
+
+  const submitArtist = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    const dedupedScenes = [form.home_scene, ...form.also_active_in.filter(s => s !== form.home_scene)];
+    const payload = {
+      name: form.name, email: form.email, city: form.city,
+      home_scene: form.home_scene, also_active_in: dedupedScenes,
+      genres: form.genres.length > 0 ? form.genres : ['Other'],
+      bio: form.bio || `Independent artist from ${form.city}.`,
+      soundcloud_profile_url: form.soundcloud_profile_url || null,
+      featured_track_url: form.featured_track_url || null,
+      instagram: form.instagram || null,
+      website: form.website || null,
+      booking_email: form.booking_email || null,
+      local_presence: form.local_presence || null,
+      music_links: form.music_links || null,
+      tracks: tracks,
+      shows: form.upcoming_shows ? form.upcoming_shows.split('\n').filter(Boolean).map(line => {
+        const parts = line.split(',').map(s => s.trim());
+        return { venue: parts[1] || 'TBA', city: parts[2] || form.city, date: parts[0] || '2026-05-01', time: parts[3] || '8:00 PM' };
+      }) : [],
+      color: pickColor(),
+    };
+    // SUPABASE READY
+    if (SUPABASE_CONFIGURED) {
+      const result = await submitArtistToSupabase(payload);
+      if (!result.success) { setSubmitError(result.error || 'Submission failed. Please try again.'); setSubmitting(false); return; }
+    } else {
+      console.log('[RADR] Demo mode — artist submission payload:', payload);
+    }
+    setSubmitting(false);
+    setStep(3);
+  };
+
+  const inputStyle = { width: '100%', padding: '12px 16px', background: '#0a0a16', border: `1px solid ${BORDER}`, borderRadius: 10, color: '#e8e8ec', fontSize: 14, outline: 'none', transition: 'border-color 0.2s' };
+  const labelStyle = { display: 'block', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 13, marginBottom: 8, color: TEXT_MED };
+  const focus = (e) => e.target.style.borderColor = ACCENT;
+  const blur = (e) => e.target.style.borderColor = BORDER;
+  const canProceed1 = form.name && form.email && form.home_scene && form.human_confirmed;
+
+  if (step === 3) return (
+    <div style={{ maxWidth: 600, margin: '0 auto', padding: '160px 24px', textAlign: 'center' }}>
+      <div style={{ width: 64, height: 64, borderRadius: '50%', background: ACCENT+'20', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 28, color: ACCENT }}>✓</div>
+      <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, marginBottom: 12 }}>Submission Received</h1>
+      <p style={{ color: TEXT_MED, fontSize: 16, lineHeight: 1.6, marginBottom: 12 }}>Your profile has been submitted to the {sceneName(form.home_scene)} scene.</p>
+      <p style={{ color: TEXT_DIM, fontSize: 14, lineHeight: 1.5, marginBottom: 32 }}>Submissions are reviewed before going live. You'll appear on RADR once approved. This helps keep the platform focused on real artists in real scenes.</p>
+      <button onClick={() => { setStep(1); setForm({ name:'',type:'solo',email:'',city:'',home_scene:'',also_active_in:[],genres:[],bio:'',soundcloud_profile_url:'',featured_track_url:'',music_links:'',local_presence:'',instagram:'',website:'',booking_email:'',upcoming_shows:'',human_confirmed:false,live_confirmed:false }); setTracks([]); }}
+        style={{ padding: '12px 24px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 10, color: '#e8e8ec', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Submit Another Artist</button>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '100px 24px 120px' }}>
+      <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 36, marginBottom: 8 }}>Join RADR</h1>
+      <p style={{ color: TEXT_MED, fontSize: 16, marginBottom: 4 }}>Add yourself to your scene and start getting discovered.</p>
+      <p style={{ color: TEXT_DIM, fontSize: 14, marginBottom: 32 }}>Built for real artists in real places.</p>
+      {!SUPABASE_CONFIGURED && <div style={{ padding: '10px 20px', background: '#fdcb6e12', border: `1px solid #fdcb6e25`, borderRadius: 10, marginBottom: 24, fontSize: 13, color: '#fdcb6e' }}>Demo mode — submissions are logged to console. Connect Supabase to enable real submissions.</div>}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 40 }}>
+        {[{ n:1, label:'Your Info' },{ n:2, label:'Your Music' }].map(s => (
+          <div key={s.n} style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: step >= s.n ? ACCENT+'12' : CARD_BG, border: `1px solid ${step >= s.n ? ACCENT+'30' : BORDER}`, textAlign: 'center' }}>
+            <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 12, color: step >= s.n ? ACCENT : TEXT_DIM }}>{s.n}. {s.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div><label style={labelStyle}>Artist / Band Name *</label><input style={inputStyle} value={form.name} onChange={e => update('name', e.target.value)} placeholder="Your name or band name" onFocus={focus} onBlur={blur} /></div>
+            <div><label style={labelStyle}>Type *</label>
+              <select style={{...inputStyle, cursor: 'pointer'}} value={form.type} onChange={e => update('type', e.target.value)}>
+                <option value="solo">Solo Artist</option><option value="band">Band</option><option value="duo">Duo</option><option value="collective">Collective</option>
+              </select>
+            </div>
+          </div>
+          <div><label style={labelStyle}>Email *</label><input style={inputStyle} type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="you@email.com" onFocus={focus} onBlur={blur} /></div>
+          <div className="grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div><label style={labelStyle}>City *</label><input style={inputStyle} value={form.city} onChange={e => update('city', e.target.value)} placeholder="Your city" onFocus={focus} onBlur={blur} /></div>
+            <div><label style={labelStyle}>Home Scene *</label>
+              <select style={{...inputStyle, cursor:'pointer'}} value={form.home_scene} onChange={e => { if (e.target.value === '__suggest__') { onSuggestScene(); } else { update('home_scene', e.target.value); } }}>
+                <option value="">Select your scene</option>
+                {scenes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <option value="__suggest__">+ Suggest a Scene</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Also Active In (scenes you tour)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {scenes.filter(s => s.id !== form.home_scene).map(s => {
+                const active = form.also_active_in.includes(s.id);
+                return <button key={s.id} type="button" onClick={() => update('also_active_in', active ? form.also_active_in.filter(x => x !== s.id) : [...form.also_active_in, s.id])} style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${active ? ACCENT : BORDER}`, background: active ? ACCENT+'18' : 'transparent', color: active ? ACCENT : TEXT_DIM, fontSize: 12, fontFamily: 'Syne, sans-serif', cursor: 'pointer' }}>{s.name}</button>;
+              })}
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Genres (up to 3) *</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {GENRES.map(g => {
+                const active = form.genres.includes(g);
+                return <button key={g} type="button" onClick={() => { if (active) update('genres', form.genres.filter(x => x !== g)); else if (form.genres.length < 3) update('genres', [...form.genres, g]); }} style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${active ? ACCENT : BORDER}`, background: active ? ACCENT+'18' : 'transparent', color: active ? ACCENT : TEXT_DIM, fontSize: 12, fontFamily: 'Syne, sans-serif', cursor: 'pointer' }}>{g}</button>;
+              })}
+            </div>
+          </div>
+          <div><label style={labelStyle}>Bio *</label><textarea style={{...inputStyle, minHeight: 100, resize: 'vertical'}} value={form.bio} onChange={e => update('bio', e.target.value)} placeholder="Tell listeners about your sound, story, and scene." onFocus={focus} onBlur={blur} /></div>
+          {/* SoundCloud fields — SUPABASE READY */}
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ color: '#ff5500', fontSize: 20 }}>☁</span>
+              <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 15 }}>SoundCloud</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div><label style={labelStyle}>SoundCloud Profile URL</label><input style={inputStyle} value={form.soundcloud_profile_url} onChange={e => update('soundcloud_profile_url', e.target.value)} placeholder="https://soundcloud.com/yourname" onFocus={e => e.target.style.borderColor='#ff5500'} onBlur={blur} /></div>
+              <div><label style={labelStyle}>Featured Track URL (optional)</label><input style={inputStyle} value={form.featured_track_url} onChange={e => update('featured_track_url', e.target.value)} placeholder="https://soundcloud.com/yourname/track-name" onFocus={e => e.target.style.borderColor='#ff5500'} onBlur={blur} /><p style={{ fontSize: 11, color: TEXT_DIM, marginTop: 6 }}>This track will be embedded on your RADR profile for instant listening.</p></div>
+            </div>
+          </div>
+          <div><label style={labelStyle}>Other Music Links (optional)</label><textarea style={{...inputStyle, minHeight: 50, resize: 'vertical'}} value={form.music_links} onChange={e => update('music_links', e.target.value)} placeholder="Bandcamp, Spotify, YouTube — one per line" onFocus={focus} onBlur={blur} /></div>
+          <div><label style={labelStyle}>Local Presence (optional)</label><input style={inputStyle} value={form.local_presence} onChange={e => update('local_presence', e.target.value)} placeholder="Recent show, venue, or link that connects you to your local scene" onFocus={focus} onBlur={blur} /><p style={{ fontSize: 11, color: TEXT_DIM, marginTop: 6 }}>Helps verify your connection to the scene.</p></div>
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
+            <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Links & Contact</div>
+            <div className="grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div><label style={labelStyle}>Instagram</label><input style={inputStyle} value={form.instagram} onChange={e => update('instagram', e.target.value)} placeholder="@handle" onFocus={focus} onBlur={blur} /></div>
+              <div><label style={labelStyle}>Website</label><input style={inputStyle} value={form.website} onChange={e => update('website', e.target.value)} placeholder="https://..." onFocus={focus} onBlur={blur} /></div>
+              <div><label style={labelStyle}>Booking Email</label><input style={inputStyle} type="email" value={form.booking_email} onChange={e => update('booking_email', e.target.value)} placeholder="booking@..." onFocus={focus} onBlur={blur} /></div>
+            </div>
+          </div>
+          <div><label style={labelStyle}>Upcoming Shows (one per line: date, venue, city, time)</label><textarea style={{...inputStyle, minHeight: 60, resize: 'vertical'}} value={form.upcoming_shows} onChange={e => update('upcoming_shows', e.target.value)} placeholder="2026-05-01, Songbyrd, Washington DC, 8:00 PM" onFocus={focus} onBlur={blur} /></div>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', padding: 14, background: CARD_BG, borderRadius: 12, border: `1px solid ${BORDER}` }}>
+            <input type="checkbox" checked={form.human_confirmed} onChange={e => update('human_confirmed', e.target.checked)} style={{ marginTop: 2, accentColor: ACCENT, width: 18, height: 18 }} />
+            <div><div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 14 }}>I am a real human artist</div><div style={{ fontSize: 12, color: TEXT_DIM, marginTop: 2 }}>I confirm this is original music from a real person or group.</div></div>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', padding: 14, background: CARD_BG, borderRadius: 12, border: `1px solid ${BORDER}` }}>
+            <input type="checkbox" checked={form.live_confirmed} onChange={e => update('live_confirmed', e.target.checked)} style={{ marginTop: 2, accentColor: ACCENT, width: 18, height: 18 }} />
+            <div><div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 14 }}>I actively perform or participate in my local music scene</div><div style={{ fontSize: 12, color: TEXT_DIM, marginTop: 2 }}>I (or my group) am connected to and active in a local scene.</div></div>
+          </label>
+          <p style={{ fontSize: 12, color: TEXT_DIM, lineHeight: 1.5, padding: '12px 16px', background: CARD_BG, borderRadius: 10, border: `1px solid ${BORDER}` }}>Profiles may be reviewed or flagged to help keep RADR focused on real artists and local scenes.</p>
+          <button onClick={() => canProceed1 && setStep(2)} style={{ padding: '16px 32px', background: canProceed1 ? ACCENT : BORDER, border: 'none', borderRadius: 12, color: canProceed1 ? '#08080f' : TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 16, cursor: canProceed1 ? 'pointer' : 'not-allowed', width: '100%' }}>Next: Add Your Tracks →</button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <Card hover={false} style={{ background: '#0a0a16', border: `1px solid ${ACCENT}20` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ color: '#ff5500', fontSize: 20 }}>☁</span>
+              <div><div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 16 }}>Link Your Tracks</div><div style={{ fontSize: 13, color: TEXT_DIM }}>Paste SoundCloud URLs for full streaming on RADR. Tracks without a link appear as previews.</div></div>
+            </div>
+          </Card>
+          <div style={{ padding: 20, background: CARD_BG, borderRadius: 14, border: `1px solid ${BORDER}` }}>
+            <label style={labelStyle}>Add a Track</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input style={inputStyle} placeholder="Track title *" value={trackInput.title} onChange={e => setTrackInput(t => ({...t, title: e.target.value}))} onFocus={focus} onBlur={blur} />
+              <input style={inputStyle} placeholder="SoundCloud URL (optional)" value={trackInput.soundcloudUrl} onChange={e => setTrackInput(t => ({...t, soundcloudUrl: e.target.value}))} onFocus={e => e.target.style.borderColor='#ff5500'} onBlur={blur} />
+              <div style={{ display: 'flex', gap: 12 }}>
+                <input style={{...inputStyle, maxWidth: 120}} placeholder="Duration" value={trackInput.duration} onChange={e => setTrackInput(t => ({...t, duration: e.target.value}))} onFocus={focus} onBlur={blur} />
+                <button onClick={addTrack} disabled={!trackInput.title} style={{ padding: '12px 24px', background: trackInput.title ? ACCENT : BORDER, border: 'none', borderRadius: 10, color: trackInput.title ? '#08080f' : TEXT_DIM, fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, cursor: trackInput.title ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>+ Add Track</button>
+              </div>
+            </div>
+          </div>
+          {tracks.length > 0 && (
+            <div>
+              <label style={{...labelStyle, marginBottom: 12}}>{tracks.length} track{tracks.length !== 1 ? 's' : ''} added</label>
+              {tracks.map((t, i) => (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: CARD_BG, borderRadius: 10, marginBottom: 8, border: `1px solid ${BORDER}` }}>
+                  <span style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, color: TEXT_DIM, width: 24 }}>{i+1}</span>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div><div style={{ fontSize: 11, color: t.soundcloudUrl ? '#ff5500' : TEXT_DIM }}>{t.soundcloudUrl ? '● Full stream linked' : '● Preview only'}</div></div>
+                  <span style={{ fontSize: 12, color: TEXT_DIM }}>{t.duration}</span>
+                  <button onClick={() => removeTrack(t.id)} style={{ background: 'none', border: 'none', color: '#e84050', cursor: 'pointer', fontSize: 18, padding: 4, lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {submitError && <div style={{ padding: '12px 20px', background: '#e8405012', border: `1px solid #e8405030`, borderRadius: 10, fontSize: 13, color: '#e84050' }}>{submitError}</div>}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button onClick={() => setStep(1)} style={{ padding: '16px 24px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 12, color: '#e8e8ec', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 15, cursor: 'pointer', flex: 1 }}>← Back</button>
+            <button onClick={submitArtist} disabled={submitting} style={{ padding: '16px 32px', background: submitting ? BORDER : ACCENT, border: 'none', borderRadius: 12, color: submitting ? TEXT_DIM : '#08080f', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 16, cursor: submitting ? 'wait' : 'pointer', flex: 2 }}>
+              {submitting ? 'Submitting...' : tracks.length > 0 ? `Submit with ${tracks.length} Track${tracks.length !== 1 ? 's' : ''}` : 'Submit to RADR'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════ */
+function Footer() {
+  return (
+    <footer style={{ borderTop: `1px solid ${BORDER}`, padding: '48px 24px 120px', textAlign: 'center' }}>
+      <div style={{ maxWidth: 500, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${ACCENT}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ width: 4, height: 4, borderRadius: '50%', background: ACCENT }} /></div>
+          <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 16 }}>RADR</span>
+        </div>
+        <p style={{ fontSize: 14, color: TEXT_DIM, lineHeight: 1.6, marginBottom: 8 }}>Hear your city. RADR is growing — artist dashboards, scene analytics, and ticket integration are on the way.</p>
+        <p style={{ fontSize: 12, color: TEXT_DIM+'80' }}>© 2026 RADR. Real artists. Real places. Real music.</p>
+      </div>
+    </footer>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   APP — BOOTSTRAPPING
+   ═══════════════════════════════════════════ */
+function App() {
+  const [currentScene, setCurrentScene] = useState(() => loadScene());
+  const [page, setPage] = useState('home');
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [currentTrack, setCurrentTrack] = useState(null);
+  const [currentArtist, setCurrentArtist] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [suggestSceneOpen, setSuggestSceneOpen] = useState(false);
+
+  // SUPABASE READY — artist data loading
+  const [supabaseArtists, setSupabaseArtists] = useState([]);
+  const [loading, setLoading] = useState(SUPABASE_CONFIGURED);
+
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) { setLoading(false); return; }
+    fetchApprovedArtists().then(artists => {
+      setSupabaseArtists(artists);
+      setLoading(false);
+    });
+  }, []);
+
+  // Supabase artists take priority; samples used as fallback only
+  const allArtists = useMemo(() => {
+    if (SUPABASE_CONFIGURED && supabaseArtists.length > 0) return supabaseArtists;
+    return SAMPLE_ARTISTS;
+  }, [supabaseArtists, loading]);
+
+  const scene = SCENES.find(s => s.id === currentScene);
+
+  const handleSceneChange = useCallback((id) => {
+    setCurrentScene(id); saveScene(id); window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    if (!playing || !currentTrack) return;
+    if (currentTrack.soundcloudUrl) return;
+    const interval = setInterval(() => { setProgress(p => { if (p >= 100) { setPlaying(false); return 0; } return p + 0.5; }); }, 500);
+    return () => clearInterval(interval);
+  }, [playing, currentTrack]);
+
+  const handlePlay = useCallback((track, artist) => {
+    if (currentTrack?.id === track.id) { setPlaying(p => !p); }
+    else { setCurrentTrack(track); setCurrentArtist(artist); setPlaying(true); setProgress(0); }
+  }, [currentTrack]);
+
+  const handlePageChange = useCallback((p) => { setPage(p); window.scrollTo(0, 0); }, []);
+  const handleSuggestScene = useCallback(() => setSuggestSceneOpen(true), []);
+  const handleSceneSuggested = useCallback((suggestion) => {
+    const existing = loadSuggestedScenes();
+    saveSuggestedScenes([...existing, suggestion]);
+  }, []);
+
+  const showSceneBar = ['scene', 'discover'].includes(page);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <div style={{ width: 48, height: 48, borderRadius: '50%', border: `3px solid ${BORDER}`, borderTopColor: ACCENT, animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ fontFamily: 'Syne, sans-serif', color: TEXT_DIM, fontSize: 14 }}>Loading RADR...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', paddingBottom: currentTrack ? 72 : 0 }}>
+      <Nav page={page} setPage={handlePageChange} currentScene={currentScene} setCurrentScene={handleSceneChange} artists={allArtists} onSuggestScene={handleSuggestScene} />
+      {showSceneBar && <SceneSummaryBar scene={scene} artists={allArtists} />}
+      {!showSceneBar && <div style={{ height: 64 }} />}
+      {page === 'home' && <LandingPage artists={allArtists} setPage={handlePageChange} setCurrentScene={handleSceneChange} onSuggestScene={handleSuggestScene} />}
+      {page === 'discover' && <DiscoverPage scene={scene} artists={allArtists} setPage={handlePageChange} setSelectedArtist={setSelectedArtist} onPlay={handlePlay} currentTrack={currentTrack} playing={playing} />}
+      {page === 'scene' && <ScenePage scene={scene} artists={allArtists} setPage={handlePageChange} setSelectedArtist={setSelectedArtist} onPlay={handlePlay} currentTrack={currentTrack} playing={playing} />}
+      {page === 'artist' && <ArtistProfilePage artist={selectedArtist} scene={scene} artists={allArtists} setPage={handlePageChange} setSelectedArtist={setSelectedArtist} onPlay={handlePlay} currentTrack={currentTrack} playing={playing} />}
+      {page === 'submit' && <SubmitPage scenes={SCENES} onSuggestScene={handleSuggestScene} />}
+      <Footer />
+      <MiniPlayer track={currentTrack} artist={currentArtist} playing={playing} onToggle={() => setPlaying(p => !p)} progress={progress} onProgressChange={p => setProgress(p)} />
+      <SuggestSceneModal open={suggestSceneOpen} onClose={() => setSuggestSceneOpen(false)} onSubmit={handleSceneSuggested} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
