@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nursing Brain Sheet — 1 Patient (Detailed)</title>
+<style>
+  @page { size: letter portrait; margin: 0.25in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 7pt;
+    line-height: 1.3;
+    width: 8.5in;
+    height: 11in;
+    padding: 0.25in;
+    color: #1a1a2e;
+    background: #fff;
+  }
+
+  /* ── TABLES ── */
+  table { width: 100%; border-collapse: collapse; }
+  td, th {
+    border: 0.5pt solid #d1d5db;
+    padding: 2.5pt 4pt;
+    vertical-align: top;
+    text-align: left;
+  }
+  th {
+    font-weight: 600;
+    font-size: 6.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+    color: #475569;
+    background: #f8fafc;
+  }
+
+  /* ── SECTION HEADERS ── */
+  .sh {
+    font-weight: 700;
+    font-size: 7pt;
+    padding: 3.5pt 6pt;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.6pt;
+    display: flex;
+    align-items: center;
+    gap: 4pt;
+    border: none;
+    border-left: 3pt solid;
+  }
+  .sh::before { font-size: 7.5pt; line-height: 1; }
+  .sh-pink   { background: linear-gradient(135deg, #fce4ec, #fce4ecaa); color: #ad1457; border-left-color: #e91e63; }
+  .sh-blue   { background: linear-gradient(135deg, #e3f2fd, #e3f2fdaa); color: #1565c0; border-left-color: #2196f3; }
+  .sh-green  { background: linear-gradient(135deg, #e8f5e9, #e8f5e9aa); color: #2e7d32; border-left-color: #4caf50; }
+  .sh-purple { background: linear-gradient(135deg, #ede7f6, #ede7f6aa); color: #6a1b9a; border-left-color: #9c27b0; }
+  .sh-amber  { background: linear-gradient(135deg, #fff3e0, #fff3e0aa); color: #e65100; border-left-color: #ff9800; }
+  .sh-teal   { background: linear-gradient(135deg, #e0f2f1, #e0f2f1aa); color: #00695c; border-left-color: #009688; }
+
+  .sh-pink::before   { content: "\2764"; }
+  .sh-blue::before   { content: "\2695"; }
+  .sh-green::before  { content: "\25B2"; }
+  .sh-purple::before { content: "\25C6"; }
+  .sh-amber::before  { content: "\26A0"; }
+  .sh-teal::before   { content: "\25CF"; }
+
+  input[type="checkbox"] { margin: 0 1.5pt 0 0; vertical-align: middle; accent-color: #6366f1; }
+
+  /* ── HEADER ── */
+  .top-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6pt 10pt;
+    margin-bottom: 4pt;
+    background: linear-gradient(135deg, #1e293b, #334155);
+    color: #fff;
+    border-radius: 4pt;
+  }
+  .top-header h1 { font-size: 12pt; font-weight: 800; letter-spacing: 1.5pt; text-transform: uppercase; }
+  .top-header .subtitle { font-size: 6.5pt; font-weight: 400; opacity: 0.65; letter-spacing: 0.5pt; margin-top: 1pt; }
+  .top-header .fields { display: flex; gap: 8pt; font-size: 7.5pt; align-items: center; }
+  .top-header .field { display: flex; flex-direction: column; align-items: flex-start; }
+  .top-header .field-label { font-size: 5.5pt; text-transform: uppercase; letter-spacing: 0.5pt; opacity: 0.55; margin-bottom: 1pt; }
+  .top-header .field-val { border-bottom: 1pt solid rgba(255,255,255,0.35); min-width: 65pt; height: 12pt; }
+
+  /* ── LAYOUT ── */
+  .three-col { display: flex; gap: 4pt; margin-top: 4pt; }
+  .col-l { flex: 1.05; min-width: 0; }
+  .col-c { flex: 1; min-width: 0; }
+  .col-r { flex: 1; min-width: 0; }
+  .col-l > *, .col-c > *, .col-r > * { margin-bottom: 4pt; }
+
+  td.lbl { font-weight: 600; width: 26%; white-space: nowrap; background: #f8fafc; color: #334155; }
+
+  /* ── ASSESSMENT ── */
+  .ag td { padding: 2.5pt 3.5pt; font-size: 6.8pt; }
+  .ag .sl { font-weight: 700; width: 17%; text-align: center; color: #fff; font-size: 6.5pt; letter-spacing: 0.3pt; border-right: 0.5pt solid rgba(255,255,255,0.3); }
+  .ag tr:nth-child(1) .sl { background: #7c3aed; }
+  .ag tr:nth-child(2) .sl { background: #e11d48; }
+  .ag tr:nth-child(3) .sl { background: #0284c7; }
+  .ag tr:nth-child(4) .sl { background: #059669; }
+  .ag tr:nth-child(5) .sl { background: #d97706; }
+  .ag tr:nth-child(6) .sl { background: #6366f1; }
+  .ag tr:nth-child(7) .sl { background: #0891b2; }
+
+  .vtbl tr:nth-child(even) td { background: #f8fafc; }
+  .vtbl th { background: #e8f5e9; color: #2e7d32; text-align: center; }
+  .vtbl td { text-align: center; height: 14pt; }
+
+  .mtbl th { background: #fff3e0; color: #e65100; }
+  .mtbl tr:nth-child(even) td { background: #fffbf5; }
+  .mtbl td { height: 13pt; }
+
+  .ltbl th { background: #ede7f6; color: #6a1b9a; }
+
+  .notes-box {
+    border: 0.5pt solid #d1d5db; border-top: none;
+    min-height: 44pt; padding: 3pt 4pt;
+    background: repeating-linear-gradient(transparent, transparent 10pt, #e8ecf0 10pt, #e8ecf0 10.5pt);
+  }
+
+  .section { border-radius: 3pt; overflow: hidden; border: 0.5pt solid #d1d5db; }
+  .section table { border: none; }
+  .section td, .section th { border-color: #e2e8f0; }
+  .section .sh { border-radius: 0; }
+
+  .watch-strip { display: flex; gap: 4pt; margin-top: 4pt; }
+  .watch-strip .section { flex: 1; }
+  .patient-bar { margin-top: 4pt; }
+
+  /* ── FOOTER ── */
+  .page-footer {
+    margin-top: 3pt;
+    text-align: center;
+    font-size: 5.5pt;
+    color: #94a3b8;
+    letter-spacing: 0.3pt;
+  }
+
+  @media print {
+    body { width: auto; height: auto; padding: 0; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════ HEADER ═══════ -->
+<div class="top-header">
+  <div>
+    <h1>Nursing Brain Sheet</h1>
+    <div class="subtitle">Detailed Single-Patient &middot; Shift Report &amp; Assessment</div>
+  </div>
+  <div class="fields">
+    <div class="field"><span class="field-label">Date</span><div class="field-val"></div></div>
+    <div class="field"><span class="field-label">Shift</span><div class="field-val"></div></div>
+    <div class="field"><span class="field-label">Nurse</span><div class="field-val"></div></div>
+    <div class="field"><span class="field-label">Room / Bed</span><div class="field-val"></div></div>
+  </div>
+</div>
+
+<!-- ═══════ PATIENT SNAPSHOT ═══════ -->
+<div class="section patient-bar">
+  <div class="sh sh-pink">Patient Snapshot</div>
+  <table>
+    <tr><td class="lbl">Name / MRN</td><td colspan="3"></td><td class="lbl">Age / DOB</td><td></td></tr>
+    <tr><td class="lbl">Admitting Dx</td><td colspan="3"></td><td class="lbl">Admit Date</td><td></td></tr>
+    <tr><td class="lbl">Code Status</td><td></td><td class="lbl">Allergies</td><td style="color:#c62828;font-weight:600"></td><td class="lbl">Diet</td><td></td></tr>
+    <tr><td class="lbl">PMH</td><td colspan="5"></td></tr>
+    <tr>
+      <td class="lbl">Isolation</td><td></td>
+      <td class="lbl">Fall Risk</td><td><input type="checkbox"> Y <input type="checkbox"> N &nbsp; Score: ___</td>
+      <td class="lbl">Interpreter</td><td><input type="checkbox"> Y &nbsp;Lang: ____</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ═══════ WATCH FOR ═══════ -->
+<div class="watch-strip">
+  <div class="section" style="flex:1.4">
+    <div class="sh sh-amber">Watch For / Priority</div>
+    <table>
+      <tr><td><input type="checkbox"> Neuro checks &nbsp;<input type="checkbox"> Tele &nbsp;<input type="checkbox"> Strict I&amp;O &nbsp;<input type="checkbox"> BG checks &nbsp;<input type="checkbox"> Aspiration precautions &nbsp;<input type="checkbox"> Seizure precautions</td></tr>
+      <tr><td><input type="checkbox"> Restraints &nbsp;<input type="checkbox"> Wound vac &nbsp;<input type="checkbox"> Chest tube &nbsp;<input type="checkbox"> Contact isolation &nbsp;<input type="checkbox"> Neutropenic &nbsp;<input type="checkbox"> Other: ___________</td></tr>
+    </table>
+  </div>
+  <div class="section" style="flex:0.6">
+    <div class="sh sh-amber">Notify MD If</div>
+    <table>
+      <tr><td style="height:12pt"></td></tr>
+      <tr><td style="height:12pt"></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════ 3-COLUMN BODY ═══════ -->
+<div class="three-col">
+
+  <!-- ── LEFT: Assessment + Labs ── -->
+  <div class="col-l">
+    <div class="section">
+      <div class="sh sh-blue">Systems Assessment</div>
+      <table class="ag">
+        <tr><td class="sl">NEURO</td><td>LOC: &nbsp; Orient: &nbsp; Pupils: &nbsp; GCS: &nbsp; Pain: __/10 &nbsp; Sedation:</td></tr>
+        <tr><td class="sl">CARDIAC</td><td>Rhythm: &nbsp; HR: &nbsp; BP: &nbsp; Edema: &nbsp; Pulses: &nbsp; Cap refill:</td></tr>
+        <tr><td class="sl">RESP</td><td>O2: __L via __ &nbsp; SpO2: &nbsp; Lungs: &nbsp; Cough: &nbsp; Sputum:</td></tr>
+        <tr><td class="sl">GI / GU</td><td>Abd: &nbsp; BS: &nbsp; Last BM: &nbsp; Foley: &nbsp; UOP: &nbsp; Stool:</td></tr>
+        <tr><td class="sl">SKIN</td><td>Color: &nbsp; Turgor: &nbsp; Wounds: &nbsp; Braden: &nbsp; Dressing &Delta;:</td></tr>
+        <tr><td class="sl">MOBILITY</td><td>Activity: &nbsp; Assist: &nbsp; PT/OT: &nbsp; DVT ppx:</td></tr>
+        <tr><td class="sl">IV / DRIPS</td><td>Site: &nbsp; Ga: &nbsp; Fluid: &nbsp; Rate: &nbsp; Drips:</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sh sh-purple">Labs</div>
+      <table class="ltbl">
+        <tr><th style="width:22%">Category</th><th>Values</th></tr>
+        <tr><td class="lbl">Electrolytes</td><td>Na: &nbsp; K: &nbsp; Cl: &nbsp; CO2: &nbsp; Ca: &nbsp; Mg: &nbsp; Phos:</td></tr>
+        <tr><td class="lbl">Renal</td><td>BUN: &nbsp; Cr: &nbsp; GFR: &nbsp; Glucose:</td></tr>
+        <tr><td class="lbl">CBC</td><td>WBC: &nbsp; Hgb: &nbsp; Hct: &nbsp; Plt:</td></tr>
+        <tr><td class="lbl">Cardiac</td><td>Troponin: &nbsp; BNP: &nbsp; PT/INR:</td></tr>
+        <tr><td class="lbl">Other</td><td>Lactate: &nbsp; ABG: &nbsp; Cx:</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── CENTER: Vitals + I&O + Meds ── -->
+  <div class="col-c">
+    <div class="section">
+      <div class="sh sh-green">Vitals Trend</div>
+      <table class="vtbl">
+        <tr><th>Time</th><th>BP</th><th>HR</th><th>RR</th><th>SpO2</th><th>Temp</th><th>Pain</th></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sh sh-teal">I &amp; O Tracking</div>
+      <table>
+        <tr><th>Time</th><th>Intake (type / amt)</th><th>Output (type / amt)</th></tr>
+        <tr><td style="height:12pt"></td><td></td><td></td></tr>
+        <tr><td style="height:12pt"></td><td></td><td></td></tr>
+        <tr><td style="height:12pt"></td><td></td><td></td></tr>
+        <tr><td colspan="2" style="text-align:right;font-weight:700">Shift Totals &mdash; In:</td><td style="font-weight:700">Out:</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sh sh-amber">Medications &amp; Tasks</div>
+      <table class="mtbl">
+        <tr><th style="width:13%">Time</th><th>Medication / Task</th><th style="width:14%">Route</th><th style="width:7%">&#10003;</th></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+        <tr><td></td><td></td><td></td><td style="text-align:center"><input type="checkbox"></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: Plan + Discharge + Comms + Notes ── -->
+  <div class="col-r">
+    <div class="section">
+      <div class="sh sh-pink">Plan of Care</div>
+      <table>
+        <tr><td class="lbl">Problem #1</td><td style="height:12pt"></td></tr>
+        <tr><td class="lbl">Interventions</td><td style="height:12pt"></td></tr>
+        <tr><td class="lbl">Problem #2</td><td style="height:12pt"></td></tr>
+        <tr><td class="lbl">Interventions</td><td style="height:12pt"></td></tr>
+        <tr><td class="lbl">Problem #3</td><td style="height:12pt"></td></tr>
+        <tr><td class="lbl">Interventions</td><td style="height:12pt"></td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sh sh-teal">Consults &amp; Pending</div>
+      <table>
+        <tr><td style="height:11pt"><input type="checkbox">&nbsp;</td><td><input type="checkbox">&nbsp;</td></tr>
+        <tr><td style="height:11pt"><input type="checkbox">&nbsp;</td><td><input type="checkbox">&nbsp;</td></tr>
+        <tr><td style="height:11pt"><input type="checkbox">&nbsp;</td><td><input type="checkbox">&nbsp;</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sh sh-green">Discharge Plan</div>
+      <table>
+        <tr><td class="lbl">Est. DC Date</td><td></td></tr>
+        <tr><td class="lbl">Disposition</td><td><input type="checkbox"> Home <input type="checkbox"> SNF <input type="checkbox"> Rehab <input type="checkbox"> Other:</td></tr>
+        <tr><td class="lbl">DC Needs</td><td><input type="checkbox"> Rx <input type="checkbox"> DME <input type="checkbox"> HH <input type="checkbox"> F/U <input type="checkbox"> Edu</td></tr>
+        <tr><td class="lbl">Barriers</td><td style="height:11pt"></td></tr>
+        <tr><td class="lbl">SW / CM</td><td></td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sh sh-purple">Communication / SBAR</div>
+      <table>
+        <tr><td class="lbl">MD notified</td><td>Time: &nbsp; Re: &nbsp; Orders:</td></tr>
+        <tr><td class="lbl">Family</td><td>Contact: &nbsp; Time: &nbsp; Info:</td></tr>
+        <tr><td class="lbl">Handoff</td><td style="height:12pt"></td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sh sh-blue">Notes</div>
+      <div class="notes-box">&nbsp;</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-footer">1-Patient Detailed Brain Sheet &middot; Print on US Letter (8.5 &times; 11)</div>
+
+</body>
+</html>
